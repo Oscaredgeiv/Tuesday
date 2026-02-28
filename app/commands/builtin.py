@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.commands.router import Command, CommandRouter
 from app.config import config
+from app.settings_manager import get_settings_manager
 
 
 def _handle_time(text: str, match: re.Match | None) -> str:
@@ -77,6 +78,19 @@ def _handle_help(text: str, match: re.Match | None) -> str:
     )
 
 
+def _handle_store_memory(text: str, match: re.Match | None) -> str:
+    if not match:
+        return "I couldn't understand what to remember."
+
+    content = match.group("content").strip()
+    if not content:
+        return "The memory was empty. Please say what you'd like me to remember."
+
+    mgr = get_settings_manager()
+    mgr.add_memory(content)
+    return f'Stored to memory: "{content}"'
+
+
 def register_builtin_commands(router: CommandRouter):
     """Register all built-in commands on the router."""
 
@@ -92,6 +106,21 @@ def register_builtin_commands(router: CommandRouter):
             ],
             handler=_handle_time,
             description="Tell the current date and time",
+        )
+    )
+
+    # store_memory registered before create_note so "remember this: X" matches memory
+    router.register(
+        Command(
+            name="store_memory",
+            patterns=[
+                r"store to memory[:\s]+(?P<content>.+)",
+                r"remember this[:\s]+(?P<content>.+)",
+                r"save to memory[:\s]+(?P<content>.+)",
+                r"memorize this[:\s]+(?P<content>.+)",
+            ],
+            handler=_handle_store_memory,
+            description="Store information to persistent memory",
         )
     )
 

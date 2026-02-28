@@ -153,14 +153,36 @@ def parse_action_plan(text: str) -> ActionPlan:
 class AIInterpreter:
     """Sends user commands to Claude and gets back structured action plans."""
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+    def __init__(
+        self,
+        model: str = "claude-sonnet-4-20250514",
+        custom_rules: str = "",
+        memories: str = "",
+    ):
         self._model = model
         self._client = None
+        self._custom_rules = custom_rules
+        self._memories = memories
 
     @property
     def is_available(self) -> bool:
         """Check if the API key is set."""
         return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+    def set_custom_rules(self, rules: str) -> None:
+        self._custom_rules = rules
+
+    def set_memories(self, memories: str) -> None:
+        self._memories = memories
+
+    def build_system_prompt(self) -> str:
+        """Build the full system prompt with custom rules and memories appended."""
+        parts = [SYSTEM_PROMPT]
+        if self._custom_rules:
+            parts.append(f"\n--- User's Custom Rules ---\n{self._custom_rules}")
+        if self._memories:
+            parts.append(f"\n--- User Memories ---\n{self._memories}")
+        return "\n".join(parts)
 
     def _get_client(self):
         """Lazy-init the Anthropic client."""
@@ -187,7 +209,7 @@ class AIInterpreter:
             response = client.messages.create(
                 model=self._model,
                 max_tokens=1024,
-                system=SYSTEM_PROMPT,
+                system=self.build_system_prompt(),
                 messages=[{"role": "user", "content": user_msg}],
             )
             raw = response.content[0].text

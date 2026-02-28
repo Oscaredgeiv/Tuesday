@@ -12,6 +12,7 @@ class TuesdayConfig:
 
     # Paths
     root_dir: Path = field(default_factory=lambda: ROOT_DIR)
+    data_dir: Path = field(default_factory=lambda: ROOT_DIR / "data")
     notes_dir: Path = field(default_factory=lambda: ROOT_DIR / "notes")
     reports_dir: Path = field(default_factory=lambda: ROOT_DIR / "reports")
     user_commands_dir: Path = field(default_factory=lambda: ROOT_DIR / "user_commands")
@@ -49,6 +50,7 @@ class TuesdayConfig:
     def ensure_dirs(self):
         """Create required directories if they don't exist."""
         for d in [
+            self.data_dir,
             self.notes_dir,
             self.reports_dir,
             self.user_commands_dir,

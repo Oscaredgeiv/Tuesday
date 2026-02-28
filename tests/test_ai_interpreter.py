@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from app.ai.interpreter import (
+    SYSTEM_PROMPT,
     ActionType,
     AIInterpreter,
     parse_action_plan,
@@ -132,3 +133,60 @@ class TestAIInterpreter:
         assert len(plan.actions) == 1
         assert plan.actions[0].action_type == ActionType.open_app
         mock_client.messages.create.assert_called_once()
+
+
+class TestBuildSystemPrompt:
+    """Tests for the build_system_prompt method."""
+
+    def test_default_prompt_is_base_only(self):
+        interp = AIInterpreter()
+        prompt = interp.build_system_prompt()
+        assert prompt == SYSTEM_PROMPT
+
+    def test_prompt_includes_custom_rules(self):
+        interp = AIInterpreter(custom_rules="Always call me boss.")
+        prompt = interp.build_system_prompt()
+        assert SYSTEM_PROMPT in prompt
+        assert "Always call me boss." in prompt
+        assert "User's Custom Rules" in prompt
+
+    def test_prompt_includes_memories(self):
+        interp = AIInterpreter(memories="My name is Oz.")
+        prompt = interp.build_system_prompt()
+        assert SYSTEM_PROMPT in prompt
+        assert "My name is Oz." in prompt
+        assert "User Memories" in prompt
+
+    def test_prompt_includes_both(self):
+        interp = AIInterpreter(custom_rules="Be concise.", memories="I like pizza.")
+        prompt = interp.build_system_prompt()
+        assert "Be concise." in prompt
+        assert "I like pizza." in prompt
+        # Rules come before memories
+        assert prompt.index("Be concise.") < prompt.index("I like pizza.")
+
+    def test_set_custom_rules(self):
+        interp = AIInterpreter()
+        interp.set_custom_rules("New rules")
+        assert "New rules" in interp.build_system_prompt()
+
+    def test_set_memories(self):
+        interp = AIInterpreter()
+        interp.set_memories("New memory")
+        assert "New memory" in interp.build_system_prompt()
+
+    @patch("app.ai.interpreter.AIInterpreter._get_client")
+    def test_interpret_uses_built_prompt(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=_make_response_json())]
+        mock_client.messages.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            interp = AIInterpreter(custom_rules="Call me boss.")
+            interp.interpret("open notepad")
+
+        call_kwargs = mock_client.messages.create.call_args
+        system_arg = call_kwargs.kwargs.get("system") or call_kwargs[1].get("system")
+        assert "Call me boss." in system_arg

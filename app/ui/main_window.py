@@ -32,8 +32,11 @@ from app.commands.builtin import register_builtin_commands
 from app.commands.router import CommandRouter
 from app.commands.voice_programmer import VoiceProgrammer
 from app.config import config
+from app.hotkeys import HotkeyManager
+from app.settings_manager import SettingsManager
 from app.stt.whisper_stt import WhisperSTT
 from app.tts.manager import TTSManager
+from app.ui.settings_dialog import SettingsDialog
 from app.ui.styles import DARK_THEME
 from app.wake.detector import WakeWordDetector
 
@@ -89,6 +92,11 @@ class TuesdayMainWindow(QMainWindow):
         self.setMinimumSize(1000, 700)
         self.setStyleSheet(DARK_THEME)
 
+        # Settings
+        self._settings_mgr = SettingsManager()
+        self._settings_mgr.load()
+        self._settings_mgr.apply_to_env()
+
         # Core components
         config.ensure_dirs()
         self._router = CommandRouter()
@@ -106,11 +114,27 @@ class TuesdayMainWindow(QMainWindow):
         self._is_recording = False
         self._worker: TranscribeWorker | None = None
 
-        # AI components
-        self._ai_interpreter = AIInterpreter(model=config.ai_model)
+        # AI components — inject custom rules and memories from settings
+        s = self._settings_mgr.settings
+        self._ai_interpreter = AIInterpreter(
+            model=s.ai.model or config.ai_model,
+            custom_rules=s.custom_rules,
+            memories=self._settings_mgr.load_memories(),
+        )
         self._ai_executor = ActionExecutor()
         self._ai_worker: AIWorker | None = None
         self._dictation = DictationController()
+
+        # Global hotkeys
+        self._hotkey_mgr = HotkeyManager(parent=self)
+        self._hotkey_mgr.mic_toggled.connect(self._on_hotkey_mic_toggle)
+        self._hotkey_mgr.dictation_toggled.connect(self._on_dictation_toggled)
+        self._hotkey_mgr.stop_speaking_triggered.connect(self._on_hotkey_stop_speaking)
+        self._apply_hotkey_bindings()
+
+        # Connect settings changes to live reload
+        self._settings_mgr.settings_changed.connect(self._on_settings_changed)
+        self._settings_mgr.memory_changed.connect(self._ai_interpreter.set_memories)
 
         self._build_ui()
         self._refresh_command_list()
@@ -140,6 +164,13 @@ class TuesdayMainWindow(QMainWindow):
         self._status_label.setObjectName("statusLabel")
         self._status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         header.addWidget(self._status_label)
+
+        settings_btn = QPushButton("\u2699")
+        settings_btn.setObjectName("settingsButton")
+        settings_btn.setToolTip("Settings")
+        settings_btn.clicked.connect(self._open_settings)
+        header.addWidget(settings_btn)
+
         main_layout.addLayout(header)
 
         # ── Main splitter: left panels | right panels ──
@@ -507,3 +538,53 @@ class TuesdayMainWindow(QMainWindow):
         self._router.set_enabled(name, enabled)
         state = "enabled" if enabled else "disabled"
         self._log_action(f"Command '{name}' {state}")
+
+    # ── Settings + Hotkeys ──
+
+    def _open_settings(self):
+        dialog = SettingsDialog(self._settings_mgr, parent=self)
+        dialog.exec()
+
+    def _on_settings_changed(self):
+        """Re-apply settings after the user saves from the dialog."""
+        s = self._settings_mgr.settings
+        self._settings_mgr.apply_to_env()
+
+        # Update AI interpreter
+        self._ai_interpreter.set_custom_rules(s.custom_rules)
+        self._ai_interpreter.set_memories(self._settings_mgr.load_memories())
+        self._ai_interpreter._model = s.ai.model or config.ai_model
+        # Force re-creation of client on next call if key changed
+        self._ai_interpreter._client = None
+
+        # Refresh AI status in footer
+        self._update_ai_status()
+
+        # Re-apply hotkeys
+        self._apply_hotkey_bindings()
+
+        self._log_action("Settings updated")
+
+    def _apply_hotkey_bindings(self):
+        s = self._settings_mgr.settings
+        self._hotkey_mgr.set_binding("mic_toggle", s.hotkeys.mic_toggle)
+        self._hotkey_mgr.set_binding("dictation_toggle", s.hotkeys.dictation_toggle)
+        self._hotkey_mgr.set_binding("stop_speaking", s.hotkeys.stop_speaking)
+
+    def _update_ai_status(self):
+        available = self._ai_interpreter.is_available
+        status = "Connected" if available else "No API key"
+        color = "#22c55e" if available else "#666"
+        self._ai_label.setText(f"AI: {status}")
+        self._ai_label.setStyleSheet(f"color: {color}; font-size: 11px;")
+
+    def _on_hotkey_mic_toggle(self):
+        if self._is_recording:
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _on_hotkey_stop_speaking(self):
+        if self._tts.is_available() and hasattr(self._tts, "stop"):
+            self._tts.stop()
+        self._log_action("Stop speaking (hotkey)")

@@ -138,4 +138,95 @@ QPushButton#dictationButton[active="true"] {
     border-color: #22c55e;
     color: #22c55e;
 }
+
+QPushButton#settingsButton {
+    background-color: transparent;
+    border: none;
+    font-size: 20px;
+    padding: 4px 8px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+}
+
+QPushButton#settingsButton:hover {
+    background-color: #2a2a4a;
+    border-radius: 6px;
+}
+
+QDialog {
+    background-color: #1a1a2e;
+}
+
+QTabWidget::pane {
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    background-color: #16213e;
+    padding: 8px;
+}
+
+QTabBar::tab {
+    background-color: #0f0f23;
+    border: 1px solid #2a2a4a;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 8px 20px;
+    margin-right: 2px;
+    color: #888;
+    font-weight: bold;
+}
+
+QTabBar::tab:selected {
+    background-color: #16213e;
+    color: #a78bfa;
+    border-color: #a78bfa;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #1a1a3e;
+    color: #e0e0e0;
+}
+
+QComboBox {
+    background-color: #0f0f23;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #e0e0e0;
+    min-width: 120px;
+}
+
+QComboBox::drop-down {
+    border: none;
+    padding-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #0f0f23;
+    border: 1px solid #2a2a4a;
+    selection-background-color: #2a2a4a;
+    color: #e0e0e0;
+}
+
+QDoubleSpinBox, QSpinBox {
+    background-color: #0f0f23;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #e0e0e0;
+}
+
+QLineEdit {
+    background-color: #0f0f23;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #e0e0e0;
+}
+
+QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus {
+    border-color: #a78bfa;
+}
 """

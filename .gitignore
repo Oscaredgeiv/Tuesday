@@ -32,3 +32,6 @@ reports/*.md
 # Notes (user data)
 notes/*.md
 !notes/.gitkeep
+
+# Data directory (settings, API keys, memory)
+data/
