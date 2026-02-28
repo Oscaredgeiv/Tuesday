@@ -1,0 +1,359 @@
+"""Tuesday main window — desktop UI with push-to-talk, panels, and controls."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QPlainTextEdit,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app.audio import AudioRecorder
+from app.commands.builtin import register_builtin_commands
+from app.commands.router import CommandRouter
+from app.commands.voice_programmer import VoiceProgrammer
+from app.config import config
+from app.stt.whisper_stt import WhisperSTT
+from app.tts.pyttsx_tts import PyttsxTTS
+from app.ui.styles import DARK_THEME
+from app.wake.detector import WakeWordDetector
+
+logger = logging.getLogger(__name__)
+
+
+class TranscribeWorker(QThread):
+    """Background thread for STT transcription."""
+
+    finished = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, stt, audio, sample_rate):
+        super().__init__()
+        self._stt = stt
+        self._audio = audio
+        self._sample_rate = sample_rate
+
+    def run(self):
+        try:
+            text = self._stt.transcribe(self._audio, self._sample_rate)
+            self.finished.emit(text)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class TuesdayMainWindow(QMainWindow):
+    """Main application window."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Tuesday — Voice Assistant")
+        self.setMinimumSize(1000, 700)
+        self.setStyleSheet(DARK_THEME)
+
+        # Core components
+        config.ensure_dirs()
+        self._router = CommandRouter()
+        register_builtin_commands(self._router)
+
+        self._voice_programmer = VoiceProgrammer(self._router)
+        self._voice_programmer.register_command(self._router)
+
+        self._stt = WhisperSTT(model_size=config.stt_model, device=config.stt_device)
+        self._tts = PyttsxTTS(rate=config.tts_rate, volume=config.tts_volume)
+        self._recorder = AudioRecorder(sample_rate=config.sample_rate, channels=config.channels)
+        self._wake_detector = WakeWordDetector(wake_phrase=config.wake_phrase)
+        self._wake_detector.enabled = config.wake_word_enabled
+
+        self._is_recording = False
+        self._worker: TranscribeWorker | None = None
+
+        self._build_ui()
+        self._refresh_command_list()
+
+        # Listening animation timer
+        self._dot_count = 0
+        self._listening_timer = QTimer()
+        self._listening_timer.timeout.connect(self._animate_listening)
+
+    def _build_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
+
+        # ── Header ──
+        header = QHBoxLayout()
+        title = QLabel("TUESDAY")
+        title.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: #a78bfa; letter-spacing: 4px;"
+        )
+        header.addWidget(title)
+
+        self._status_label = QLabel("Ready")
+        self._status_label.setObjectName("statusLabel")
+        self._status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        header.addWidget(self._status_label)
+        main_layout.addLayout(header)
+
+        # ── Main splitter: left panels | right panels ──
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left side: Mic + Transcript + Response
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(8)
+
+        # Mic area
+        mic_area = QHBoxLayout()
+        mic_area.addStretch()
+
+        mic_col = QVBoxLayout()
+        mic_col.setAlignment(Qt.AlignCenter)
+
+        self._mic_btn = QPushButton("\U0001f3a4")
+        self._mic_btn.setObjectName("micButton")
+        self._mic_btn.setToolTip("Hold to talk (or press and release)")
+        self._mic_btn.pressed.connect(self._on_mic_pressed)
+        self._mic_btn.released.connect(self._on_mic_released)
+        mic_col.addWidget(self._mic_btn, alignment=Qt.AlignCenter)
+
+        self._listening_label = QLabel("")
+        self._listening_label.setObjectName("listeningLabel")
+        self._listening_label.setAlignment(Qt.AlignCenter)
+        mic_col.addWidget(self._listening_label)
+
+        mic_area.addLayout(mic_col)
+        mic_area.addStretch()
+        left_layout.addLayout(mic_area)
+
+        # Wake word toggle
+        wake_row = QHBoxLayout()
+        self._wake_checkbox = QCheckBox('Enable "Hey Tuesday" wake word (experimental)')
+        self._wake_checkbox.setChecked(config.wake_word_enabled)
+        self._wake_checkbox.toggled.connect(self._on_wake_toggled)
+        wake_row.addWidget(self._wake_checkbox)
+        wake_row.addStretch()
+        left_layout.addLayout(wake_row)
+
+        # Transcript panel
+        transcript_group = QGroupBox("Transcript")
+        transcript_layout = QVBoxLayout(transcript_group)
+        self._transcript = QTextEdit()
+        self._transcript.setReadOnly(True)
+        self._transcript.setPlaceholderText("Your speech will appear here...")
+        transcript_layout.addWidget(self._transcript)
+        left_layout.addWidget(transcript_group, stretch=1)
+
+        # Response panel
+        response_group = QGroupBox("Response")
+        response_layout = QVBoxLayout(response_group)
+        self._response = QTextEdit()
+        self._response.setReadOnly(True)
+        self._response.setPlaceholderText("Tuesday's response will appear here...")
+        response_layout.addWidget(self._response)
+        left_layout.addWidget(response_group, stretch=1)
+
+        splitter.addWidget(left)
+
+        # Right side: Command list + Planned Actions
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
+
+        # Command list panel
+        cmd_group = QGroupBox("Commands")
+        cmd_layout = QVBoxLayout(cmd_group)
+        self._cmd_list = QListWidget()
+        self._cmd_list.itemChanged.connect(self._on_command_toggled)
+        cmd_layout.addWidget(self._cmd_list)
+
+        cmd_buttons = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._refresh_command_list)
+        cmd_buttons.addWidget(refresh_btn)
+        cmd_buttons.addStretch()
+        cmd_layout.addLayout(cmd_buttons)
+
+        right_layout.addWidget(cmd_group, stretch=1)
+
+        # Planned Actions panel
+        actions_group = QGroupBox("Planned Actions")
+        actions_layout = QVBoxLayout(actions_group)
+        self._actions_log = QPlainTextEdit()
+        self._actions_log.setReadOnly(True)
+        self._actions_log.setPlaceholderText("Actions and events will be logged here...")
+        actions_layout.addWidget(self._actions_log)
+        right_layout.addWidget(actions_group, stretch=1)
+
+        splitter.addWidget(right)
+        splitter.setSizes([600, 400])
+
+        main_layout.addWidget(splitter, stretch=1)
+
+        # ── Footer ──
+        footer = QHBoxLayout()
+        self._stt_label = QLabel(f"STT: {self._stt.name}")
+        self._stt_label.setStyleSheet("color: #666; font-size: 11px;")
+        footer.addWidget(self._stt_label)
+
+        self._tts_label = QLabel(f"TTS: {self._tts.name}")
+        self._tts_label.setStyleSheet("color: #666; font-size: 11px;")
+        footer.addWidget(self._tts_label)
+
+        footer.addStretch()
+
+        audio_status = "OK" if self._recorder.is_available else f"No mic: {self._recorder.error}"
+        self._audio_label = QLabel(f"Audio: {audio_status}")
+        self._audio_label.setStyleSheet("color: #666; font-size: 11px;")
+        footer.addWidget(self._audio_label)
+
+        main_layout.addLayout(footer)
+
+    # ── Mic handling ──
+
+    def _on_mic_pressed(self):
+        if self._is_recording:
+            return
+        self._start_recording()
+
+    def _on_mic_released(self):
+        if not self._is_recording:
+            return
+        self._stop_recording()
+
+    def _start_recording(self):
+        if not self._recorder.is_available:
+            self._log_action("Cannot record: microphone not available")
+            self._set_status("No microphone detected")
+            return
+
+        self._is_recording = True
+        self._mic_btn.setProperty("recording", "true")
+        self._mic_btn.style().unpolish(self._mic_btn)
+        self._mic_btn.style().polish(self._mic_btn)
+
+        self._recorder.start()
+        self._set_status("Listening...")
+        self._listening_label.setText("Listening...")
+        self._dot_count = 0
+        self._listening_timer.start(400)
+        self._log_action("Recording started")
+
+    def _stop_recording(self):
+        self._is_recording = False
+        self._listening_timer.stop()
+        self._listening_label.setText("")
+        self._mic_btn.setProperty("recording", "false")
+        self._mic_btn.style().unpolish(self._mic_btn)
+        self._mic_btn.style().polish(self._mic_btn)
+
+        audio = self._recorder.stop()
+        self._log_action(f"Recording stopped ({len(audio) / config.sample_rate:.1f}s)")
+
+        if audio.size == 0:
+            self._set_status("No audio captured")
+            return
+
+        self._set_status("Transcribing...")
+        self._worker = TranscribeWorker(self._stt, audio, config.sample_rate)
+        self._worker.finished.connect(self._on_transcription)
+        self._worker.error.connect(self._on_transcription_error)
+        self._worker.start()
+
+    def _on_transcription(self, text: str):
+        if not text.strip():
+            self._set_status("No speech detected")
+            self._log_action("Transcription returned empty")
+            return
+
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._transcript.append(f"[{timestamp}] {text}")
+        self._log_action(f"Transcribed: {text}")
+
+        # Route the command
+        self._set_status("Processing...")
+        response, cmd = self._router.route(text)
+
+        self._response.setPlainText(response)
+
+        if cmd:
+            self._log_action(f"Matched command: {cmd.name}")
+            self._set_status(f"Ran: {cmd.name}")
+        else:
+            self._log_action("No command matched")
+            self._set_status("Ready")
+
+        # Speak the response
+        if self._tts.is_available():
+            # Speak a cleaned version (strip markdown)
+            speak_text = response.replace("**", "").replace("```", "").replace("#", "")
+            self._tts.speak(speak_text)
+
+        # Refresh command list in case voice programming added something
+        self._refresh_command_list()
+
+    def _on_transcription_error(self, error: str):
+        self._set_status(f"STT Error: {error}")
+        self._log_action(f"Transcription error: {error}")
+
+    # ── UI helpers ──
+
+    def _set_status(self, text: str):
+        self._status_label.setText(text)
+
+    def _log_action(self, text: str):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._actions_log.appendPlainText(f"[{timestamp}] {text}")
+
+    def _animate_listening(self):
+        self._dot_count = (self._dot_count + 1) % 4
+        dots = "." * self._dot_count
+        self._listening_label.setText(f"Listening{dots}")
+
+    def _on_wake_toggled(self, checked: bool):
+        self._wake_detector.enabled = checked
+        state = "enabled" if checked else "disabled"
+        self._log_action(f"Wake word {state}")
+
+    def _refresh_command_list(self):
+        self._cmd_list.blockSignals(True)
+        self._cmd_list.clear()
+
+        for cmd_info in self._router.get_command_list():
+            item = QListWidgetItem()
+            item.setText(f"{cmd_info['name']}: {cmd_info['description']}")
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if cmd_info["enabled"] else Qt.Unchecked)
+            item.setData(Qt.UserRole, cmd_info["name"])
+
+            if cmd_info["user_generated"]:
+                item.setToolTip("User-created command")
+
+            self._cmd_list.addItem(item)
+
+        self._cmd_list.blockSignals(False)
+
+    def _on_command_toggled(self, item: QListWidgetItem):
+        name = item.data(Qt.UserRole)
+        enabled = item.checkState() == Qt.Checked
+        self._router.set_enabled(name, enabled)
+        state = "enabled" if enabled else "disabled"
+        self._log_action(f"Command '{name}' {state}")
