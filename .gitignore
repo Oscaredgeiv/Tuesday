@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Audio models (large, download separately)
+models/
+
+# Environment
+.env
+*.env.local
+
+# Reports (generated)
+reports/*.md
+!reports/.gitkeep
+
+# Notes (user data)
+notes/*.md
+!notes/.gitkeep
