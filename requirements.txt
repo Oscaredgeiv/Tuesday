@@ -19,6 +19,14 @@ numpy>=1.24.0
 # Config
 pyyaml>=6.0
 
+# AI command interpretation
+anthropic>=0.40.0
+
+# Desktop automation
+pyautogui>=0.9.54
+pynput>=1.7.6
+pyperclip>=1.8.2
+
 # Dev / Quality
 pytest>=7.4.0
 ruff>=0.4.0

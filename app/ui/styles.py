@@ -123,4 +123,19 @@ QSplitter::handle {
     background-color: #2a2a4a;
     width: 2px;
 }
+
+QPushButton#dictationButton {
+    background-color: #2a2a4a;
+    border: 2px solid #3a3a6a;
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+QPushButton#dictationButton[active="true"] {
+    background-color: #166534;
+    border-color: #22c55e;
+    color: #22c55e;
+}
 """

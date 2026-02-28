@@ -35,6 +35,11 @@ class TuesdayConfig:
     sample_rate: int = 16000
     channels: int = 1
 
+    # AI command interpretation
+    ai_model: str = "claude-sonnet-4-20250514"
+    ai_enabled: bool = True
+    ai_confidence_threshold: float = 0.7
+
     # Autonomous mode
     autonomous_max_minutes: int = 30
     autonomous_allowed_commands: list[str] = field(

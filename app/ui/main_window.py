@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import datetime
 
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
@@ -22,6 +24,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.ai.dictation import DictationController
+from app.ai.executor import ActionExecutor, get_desktop_context
+from app.ai.interpreter import ActionPlan, AIInterpreter, DesktopAction
 from app.audio import AudioRecorder
 from app.commands.builtin import register_builtin_commands
 from app.commands.router import CommandRouter
@@ -55,6 +60,26 @@ class TranscribeWorker(QThread):
             self.error.emit(str(e))
 
 
+class AIWorker(QThread):
+    """Background thread for AI command interpretation."""
+
+    finished = Signal(object)  # ActionPlan
+    error = Signal(str)
+
+    def __init__(self, interpreter: AIInterpreter, text: str, desktop_context: str = ""):
+        super().__init__()
+        self._interpreter = interpreter
+        self._text = text
+        self._desktop_context = desktop_context
+
+    def run(self):
+        try:
+            plan = self._interpreter.interpret(self._text, self._desktop_context)
+            self.finished.emit(plan)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 class TuesdayMainWindow(QMainWindow):
     """Main application window."""
 
@@ -80,6 +105,12 @@ class TuesdayMainWindow(QMainWindow):
 
         self._is_recording = False
         self._worker: TranscribeWorker | None = None
+
+        # AI components
+        self._ai_interpreter = AIInterpreter(model=config.ai_model)
+        self._ai_executor = ActionExecutor()
+        self._ai_worker: AIWorker | None = None
+        self._dictation = DictationController()
 
         self._build_ui()
         self._refresh_command_list()
@@ -143,14 +174,23 @@ class TuesdayMainWindow(QMainWindow):
         mic_area.addStretch()
         left_layout.addLayout(mic_area)
 
-        # Wake word toggle
-        wake_row = QHBoxLayout()
+        # Wake word toggle + dictation button
+        controls_row = QHBoxLayout()
         self._wake_checkbox = QCheckBox('Enable "Hey Tuesday" wake word (experimental)')
         self._wake_checkbox.setChecked(config.wake_word_enabled)
         self._wake_checkbox.toggled.connect(self._on_wake_toggled)
-        wake_row.addWidget(self._wake_checkbox)
-        wake_row.addStretch()
-        left_layout.addLayout(wake_row)
+        controls_row.addWidget(self._wake_checkbox)
+
+        controls_row.addStretch()
+
+        self._dictation_btn = QPushButton("Dictation: OFF")
+        self._dictation_btn.setObjectName("dictationButton")
+        self._dictation_btn.setProperty("active", "false")
+        self._dictation_btn.setToolTip("Toggle dictation mode — speech typed into focused app")
+        self._dictation_btn.clicked.connect(self._on_dictation_toggled)
+        controls_row.addWidget(self._dictation_btn)
+
+        left_layout.addLayout(controls_row)
 
         # Transcript panel
         transcript_group = QGroupBox("Transcript")
@@ -217,6 +257,12 @@ class TuesdayMainWindow(QMainWindow):
         self._tts_label = QLabel(f"TTS: {self._tts.name}")
         self._tts_label.setStyleSheet("color: #666; font-size: 11px;")
         footer.addWidget(self._tts_label)
+
+        ai_status = "Connected" if self._ai_interpreter.is_available else "No API key"
+        self._ai_label = QLabel(f"AI: {ai_status}")
+        ai_color = "#22c55e" if self._ai_interpreter.is_available else "#666"
+        self._ai_label.setStyleSheet(f"color: {ai_color}; font-size: 11px;")
+        footer.addWidget(self._ai_label)
 
         footer.addStretch()
 
@@ -288,27 +334,111 @@ class TuesdayMainWindow(QMainWindow):
         self._transcript.append(f"[{timestamp}] {text}")
         self._log_action(f"Transcribed: {text}")
 
-        # Route the command
+        # 1. Check for dictation toggle commands
+        toggle = self._dictation.check_toggle_command(text)
+        if toggle == "start":
+            self._dictation.activate()
+            self._update_dictation_button()
+            self._set_status("Dictation ON")
+            self._log_action("Dictation mode activated")
+            self._speak("Dictation mode on. I'll type what you say.")
+            return
+        if toggle == "stop":
+            self._dictation.deactivate()
+            self._update_dictation_button()
+            self._set_status("Dictation OFF")
+            self._log_action("Dictation mode deactivated")
+            self._speak("Dictation mode off.")
+            return
+
+        # 2. If dictation is active, type text into focused field
+        if self._dictation.is_active:
+            self._dictation.type_text(text)
+            self._set_status("Dictated")
+            self._log_action(f"Dictated: {text}")
+            return
+
+        # 3. Try regex command matching (fast path)
         self._set_status("Processing...")
         response, cmd = self._router.route(text)
 
-        self._response.setPlainText(response)
-
         if cmd:
+            self._response.setPlainText(response)
             self._log_action(f"Matched command: {cmd.name}")
             self._set_status(f"Ran: {cmd.name}")
-        else:
-            self._log_action("No command matched")
-            self._set_status("Ready")
+            self._speak(response)
+            self._refresh_command_list()
+            return
 
-        # Speak the response
-        if self._tts.is_available():
-            # Speak a cleaned version (strip markdown)
-            speak_text = response.replace("**", "").replace("```", "").replace("#", "")
-            self._tts.speak(speak_text)
+        # 4. Fall back to AI interpretation
+        if config.ai_enabled and self._ai_interpreter.is_available:
+            self._set_status("AI thinking...")
+            self._log_action("No regex match — sending to AI")
+            context = ""
+            with contextlib.suppress(Exception):
+                context = get_desktop_context()
+            self._ai_worker = AIWorker(self._ai_interpreter, text, context)
+            self._ai_worker.finished.connect(self._on_ai_plan_ready)
+            self._ai_worker.error.connect(self._on_ai_error)
+            self._ai_worker.start()
+            return
 
-        # Refresh command list in case voice programming added something
+        # 5. No AI available — show fallback
+        self._response.setPlainText(response)
+        self._log_action("No command matched (AI unavailable)")
+        self._set_status("Ready")
+        self._speak(response)
         self._refresh_command_list()
+
+    def _on_ai_plan_ready(self, plan: ActionPlan):
+        """Handle the AI action plan once it's ready."""
+        self._log_action(f"AI confidence: {plan.confidence:.0%} — {plan.reasoning}")
+
+        if plan.confidence < config.ai_confidence_threshold:
+            msg = plan.spoken_response or "I'm not sure what you mean. Could you rephrase?"
+            self._response.setPlainText(msg)
+            self._set_status("Low confidence")
+            self._speak(msg)
+            return
+
+        # Log planned actions
+        for action in plan.actions:
+            self._log_action(f"  -> {action.action_type.value}: {action.description}")
+
+        # Execute with confirmation callback for dangerous actions
+        def _confirm(action: DesktopAction) -> bool:
+            reply = QMessageBox.question(
+                self,
+                "Confirm Action",
+                f"Allow this action?\n\n{action.description}\n\n"
+                f"Type: {action.action_type.value}\nParams: {action.params}",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            return reply == QMessageBox.Yes
+
+        results = self._ai_executor.execute_plan(plan, confirm_callback=_confirm)
+        for r in results:
+            self._log_action(f"  {r}")
+
+        # Speak the AI's response
+        if plan.spoken_response:
+            self._response.setPlainText(plan.spoken_response)
+            self._speak(plan.spoken_response)
+
+        # Handle any speak actions in the plan
+        for action in plan.actions:
+            if action.action_type.value == "speak":
+                speak_text = action.params.get("text", "")
+                if speak_text:
+                    self._speak(speak_text)
+
+        self._set_status("Ready")
+
+    def _on_ai_error(self, error: str):
+        self._set_status("AI Error")
+        self._log_action(f"AI error: {error}")
+        self._response.setPlainText(f"AI error: {error}")
 
     def _on_transcription_error(self, error: str):
         self._set_status(f"STT Error: {error}")
@@ -327,6 +457,26 @@ class TuesdayMainWindow(QMainWindow):
         self._dot_count = (self._dot_count + 1) % 4
         dots = "." * self._dot_count
         self._listening_label.setText(f"Listening{dots}")
+
+    def _speak(self, text: str):
+        """Speak text via TTS after cleaning markdown."""
+        if self._tts.is_available():
+            clean = text.replace("**", "").replace("```", "").replace("#", "")
+            self._tts.speak(clean)
+
+    def _on_dictation_toggled(self):
+        active = self._dictation.toggle()
+        self._update_dictation_button()
+        state = "activated" if active else "deactivated"
+        self._log_action(f"Dictation mode {state}")
+        self._speak(f"Dictation mode {'on' if active else 'off'}.")
+
+    def _update_dictation_button(self):
+        active = self._dictation.is_active
+        self._dictation_btn.setText(f"Dictation: {'ON' if active else 'OFF'}")
+        self._dictation_btn.setProperty("active", "true" if active else "false")
+        self._dictation_btn.style().unpolish(self._dictation_btn)
+        self._dictation_btn.style().polish(self._dictation_btn)
 
     def _on_wake_toggled(self, checked: bool):
         self._wake_detector.enabled = checked
