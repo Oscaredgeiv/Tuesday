@@ -28,7 +28,7 @@ from app.commands.router import CommandRouter
 from app.commands.voice_programmer import VoiceProgrammer
 from app.config import config
 from app.stt.whisper_stt import WhisperSTT
-from app.tts.pyttsx_tts import PyttsxTTS
+from app.tts.manager import TTSManager
 from app.ui.styles import DARK_THEME
 from app.wake.detector import WakeWordDetector
 
@@ -73,7 +73,7 @@ class TuesdayMainWindow(QMainWindow):
         self._voice_programmer.register_command(self._router)
 
         self._stt = WhisperSTT(model_size=config.stt_model, device=config.stt_device)
-        self._tts = PyttsxTTS(rate=config.tts_rate, volume=config.tts_volume)
+        self._tts = TTSManager()
         self._recorder = AudioRecorder(sample_rate=config.sample_rate, channels=config.channels)
         self._wake_detector = WakeWordDetector(wake_phrase=config.wake_phrase)
         self._wake_detector.enabled = config.wake_word_enabled
