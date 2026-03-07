@@ -13,7 +13,7 @@ const ADMIN_USER = { username: 'Oscar@servicestorm.io', password: 'Redsun301!', 
 authRouter.post('/login', validate(LoginRequestSchema), async (req, res) => {
   const { username, password } = req.body;
 
-  if (username !== ADMIN_USER.username || password !== ADMIN_USER.password) {
+  if (username.toLowerCase() !== ADMIN_USER.username.toLowerCase() || password !== ADMIN_USER.password) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;
   }
