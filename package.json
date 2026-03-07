@@ -1,0 +1,32 @@
+{
+  "name": "tuesday",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tuesday — Local-first AI assistant",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:server": "turbo run dev --filter=@tuesday/server",
+    "dev:web": "turbo run dev --filter=@tuesday/web",
+    "dev:agent": "turbo run dev --filter=@tuesday/agent",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @tuesday/server exec prisma migrate dev",
+    "db:push": "pnpm --filter @tuesday/server exec prisma db push",
+    "db:generate": "pnpm --filter @tuesday/server exec prisma generate",
+    "db:studio": "pnpm --filter @tuesday/server exec prisma studio",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

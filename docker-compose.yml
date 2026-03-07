@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tuesday
+      POSTGRES_PASSWORD: tuesday
+      POSTGRES_DB: tuesday
+    ports:
+      - "5432:5432"
+    volumes:
+      - .docker-data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tuesday"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - "4600:4600"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://tuesday:tuesday@postgres:5432/tuesday
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/server/src:/app/apps/server/src
+      - ./packages:/app/packages
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:5173"
+    env_file: .env
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./packages:/app/packages

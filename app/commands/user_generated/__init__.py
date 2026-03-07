@@ -1,1 +1,0 @@
-"""User-generated voice commands."""

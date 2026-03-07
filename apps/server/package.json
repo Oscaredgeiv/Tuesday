@@ -1,0 +1,38 @@
+{
+  "name": "@tuesday/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tuesday/shared": "workspace:*",
+    "@tuesday/toolkit": "workspace:*",
+    "@tuesday/model-providers": "workspace:*",
+    "@tuesday/workflows": "workspace:*",
+    "@prisma/client": "^6.2.0",
+    "express": "^4.21.0",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.18.0",
+    "zod": "^3.23.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/ws": "^8.5.13",
+    "@types/morgan": "^1.9.9",
+    "prisma": "^6.2.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.1.0"
+  }
+}

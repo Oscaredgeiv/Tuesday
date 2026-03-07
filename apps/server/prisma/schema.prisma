@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ActionStatus {
+  requested
+  planned
+  awaiting_approval
+  approved
+  denied
+  running
+  verifying
+  succeeded
+  failed
+  cancelled
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  denied
+  expired
+}
+
+enum AgentStatus {
+  online
+  offline
+  busy
+}
+
+model Agent {
+  id         String      @id @default(cuid())
+  name       String
+  hostname   String
+  os         String
+  apiKey     String      @unique
+  status     AgentStatus @default(online)
+  lastSeenAt DateTime    @default(now())
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  actions    Action[]
+
+  @@index([apiKey])
+}
+
+model Action {
+  id               String       @id @default(cuid())
+  toolName         String
+  intent           String?
+  input            Json
+  output           Json?
+  status           ActionStatus @default(requested)
+  riskLevel        String       @default("low")
+  requiresApproval Boolean      @default(false)
+  agentId          String?
+  agent            Agent?       @relation(fields: [agentId], references: [id])
+  approval         Approval?
+  auditLogs        AuditLog[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([status])
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+model Approval {
+  id        String         @id @default(cuid())
+  actionId  String         @unique
+  action    Action         @relation(fields: [actionId], references: [id])
+  status    ApprovalStatus @default(pending)
+  expiresAt DateTime
+  decidedAt DateTime?
+  decidedBy String?
+  reason    String?
+  createdAt DateTime       @default(now())
+
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  event     String
+  actionId  String?
+  action    Action?  @relation(fields: [actionId], references: [id])
+  agentId   String?
+  actor     String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([actionId])
+  @@index([createdAt])
+}
+
+model CommandHistory {
+  id         String   @id @default(cuid())
+  rawText    String
+  mode       String
+  intent     String?
+  toolName   String?
+  actionId   String?
+  confidence Float?
+  agentId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Workflow {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  triggerPhrase String?
+  steps         Json
+  variables     Json?
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model WorkflowRun {
+  id               String    @id @default(cuid())
+  workflowId       String
+  status           String    @default("running")
+  currentStepIndex Int       @default(0)
+  stepResults      Json      @default("[]")
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+}

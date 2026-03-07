@@ -1,12 +1,12 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
+node_modules/
 dist/
-build/
-.venv/
-venv/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
 
 # IDE
 .idea/
@@ -18,20 +18,17 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Audio models (large, download separately)
-models/
+# Prisma
+apps/server/prisma/*.db
+apps/server/prisma/migrations/
 
-# Environment
-.env
-*.env.local
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
 
-# Reports (generated)
-reports/*.md
-!reports/.gitkeep
+# Test
+coverage/
 
-# Notes (user data)
-notes/*.md
-!notes/.gitkeep
-
-# Data directory (settings, API keys, memory)
-data/
+# Docker
+.docker-data/
