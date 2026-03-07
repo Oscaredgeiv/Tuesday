@@ -20,7 +20,7 @@ class CommandService {
     });
 
     if (classification.mode === 'dictation') {
-      const entry = await prisma.commandHistory.create({
+      await prisma.command.create({
         data: {
           rawText: request.text,
           mode: 'dictation',
@@ -60,7 +60,7 @@ class CommandService {
       actionId = action.id;
     }
 
-    await prisma.commandHistory.create({
+    await prisma.command.create({
       data: {
         rawText: request.text,
         mode: 'command',
@@ -101,7 +101,7 @@ class CommandService {
   }
 
   async getHistory(limit = 50, offset = 0) {
-    return prisma.commandHistory.findMany({
+    return prisma.command.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,

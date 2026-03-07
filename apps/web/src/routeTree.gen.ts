@@ -9,18 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WorkflowsRouteImport } from './routes/workflows'
+import { Route as VoiceRouteImport } from './routes/voice'
+import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as CommandsRouteImport } from './routes/commands'
-import { Route as AuditRouteImport } from './routes/audit'
-import { Route as ApprovalsRouteImport } from './routes/approvals'
-import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as LibraryRouteImport } from './routes/library'
+import { Route as CommandRouteImport } from './routes/command'
+import { Route as AutomationsRouteImport } from './routes/automations'
+import { Route as AgentRouteImport } from './routes/agent'
 import { Route as IndexRouteImport } from './routes/index'
 
-const WorkflowsRoute = WorkflowsRouteImport.update({
-  id: '/workflows',
-  path: '/workflows',
+const VoiceRoute = VoiceRouteImport.update({
+  id: '/voice',
+  path: '/voice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -28,29 +36,39 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionsRoute = SessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CommandsRoute = CommandsRouteImport.update({
-  id: '/commands',
-  path: '/commands',
+const LibraryRoute = LibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuditRoute = AuditRouteImport.update({
-  id: '/audit',
-  path: '/audit',
+const CommandRoute = CommandRouteImport.update({
+  id: '/command',
+  path: '/command',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApprovalsRoute = ApprovalsRouteImport.update({
-  id: '/approvals',
-  path: '/approvals',
+const AutomationsRoute = AutomationsRouteImport.update({
+  id: '/automations',
+  path: '/automations',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgentsRoute = AgentsRouteImport.update({
-  id: '/agents',
-  path: '/agents',
+const AgentRoute = AgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -61,86 +79,114 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
-  '/approvals': typeof ApprovalsRoute
-  '/audit': typeof AuditRoute
-  '/commands': typeof CommandsRoute
+  '/agent': typeof AgentRoute
+  '/automations': typeof AutomationsRoute
+  '/command': typeof CommandRoute
+  '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
-  '/workflows': typeof WorkflowsRoute
+  '/skills': typeof SkillsRoute
+  '/voice': typeof VoiceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
-  '/approvals': typeof ApprovalsRoute
-  '/audit': typeof AuditRoute
-  '/commands': typeof CommandsRoute
+  '/agent': typeof AgentRoute
+  '/automations': typeof AutomationsRoute
+  '/command': typeof CommandRoute
+  '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
-  '/workflows': typeof WorkflowsRoute
+  '/skills': typeof SkillsRoute
+  '/voice': typeof VoiceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
-  '/approvals': typeof ApprovalsRoute
-  '/audit': typeof AuditRoute
-  '/commands': typeof CommandsRoute
+  '/agent': typeof AgentRoute
+  '/automations': typeof AutomationsRoute
+  '/command': typeof CommandRoute
+  '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/memory': typeof MemoryRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
-  '/workflows': typeof WorkflowsRoute
+  '/skills': typeof SkillsRoute
+  '/voice': typeof VoiceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/agents'
-    | '/approvals'
-    | '/audit'
-    | '/commands'
+    | '/agent'
+    | '/automations'
+    | '/command'
+    | '/library'
     | '/login'
+    | '/memory'
+    | '/sessions'
     | '/settings'
-    | '/workflows'
+    | '/skills'
+    | '/voice'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/agents'
-    | '/approvals'
-    | '/audit'
-    | '/commands'
+    | '/agent'
+    | '/automations'
+    | '/command'
+    | '/library'
     | '/login'
+    | '/memory'
+    | '/sessions'
     | '/settings'
-    | '/workflows'
+    | '/skills'
+    | '/voice'
   id:
     | '__root__'
     | '/'
-    | '/agents'
-    | '/approvals'
-    | '/audit'
-    | '/commands'
+    | '/agent'
+    | '/automations'
+    | '/command'
+    | '/library'
     | '/login'
+    | '/memory'
+    | '/sessions'
     | '/settings'
-    | '/workflows'
+    | '/skills'
+    | '/voice'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgentsRoute: typeof AgentsRoute
-  ApprovalsRoute: typeof ApprovalsRoute
-  AuditRoute: typeof AuditRoute
-  CommandsRoute: typeof CommandsRoute
+  AgentRoute: typeof AgentRoute
+  AutomationsRoute: typeof AutomationsRoute
+  CommandRoute: typeof CommandRoute
+  LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
+  MemoryRoute: typeof MemoryRoute
+  SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
-  WorkflowsRoute: typeof WorkflowsRoute
+  SkillsRoute: typeof SkillsRoute
+  VoiceRoute: typeof VoiceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/workflows': {
-      id: '/workflows'
-      path: '/workflows'
-      fullPath: '/workflows'
-      preLoaderRoute: typeof WorkflowsRouteImport
+    '/voice': {
+      id: '/voice'
+      path: '/voice'
+      fullPath: '/voice'
+      preLoaderRoute: typeof VoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -150,6 +196,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sessions': {
+      id: '/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -157,32 +217,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/commands': {
-      id: '/commands'
-      path: '/commands'
-      fullPath: '/commands'
-      preLoaderRoute: typeof CommandsRouteImport
+    '/library': {
+      id: '/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/audit': {
-      id: '/audit'
-      path: '/audit'
-      fullPath: '/audit'
-      preLoaderRoute: typeof AuditRouteImport
+    '/command': {
+      id: '/command'
+      path: '/command'
+      fullPath: '/command'
+      preLoaderRoute: typeof CommandRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/approvals': {
-      id: '/approvals'
-      path: '/approvals'
-      fullPath: '/approvals'
-      preLoaderRoute: typeof ApprovalsRouteImport
+    '/automations': {
+      id: '/automations'
+      path: '/automations'
+      fullPath: '/automations'
+      preLoaderRoute: typeof AutomationsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agents': {
-      id: '/agents'
-      path: '/agents'
-      fullPath: '/agents'
-      preLoaderRoute: typeof AgentsRouteImport
+    '/agent': {
+      id: '/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -197,13 +257,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgentsRoute: AgentsRoute,
-  ApprovalsRoute: ApprovalsRoute,
-  AuditRoute: AuditRoute,
-  CommandsRoute: CommandsRoute,
+  AgentRoute: AgentRoute,
+  AutomationsRoute: AutomationsRoute,
+  CommandRoute: CommandRoute,
+  LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
+  MemoryRoute: MemoryRoute,
+  SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
-  WorkflowsRoute: WorkflowsRoute,
+  SkillsRoute: SkillsRoute,
+  VoiceRoute: VoiceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

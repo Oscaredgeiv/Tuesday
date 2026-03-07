@@ -16,6 +16,14 @@ import { agentRouter } from './routes/agents.js';
 import { workflowRouter } from './routes/workflows.js';
 import { auditRouter } from './routes/audit.js';
 import { settingsRouter } from './routes/settings.js';
+import { sessionRouter } from './routes/sessions.js';
+import { memoryRouter } from './routes/memory.js';
+import { skillRouter } from './routes/skills.js';
+import { playbookRouter } from './routes/playbooks.js';
+import { libraryRouter } from './routes/library.js';
+import { automationRouter } from './routes/automations.js';
+import { hotkeyRouter } from './routes/hotkeys.js';
+import { dashboardRouter } from './routes/dashboard.js';
 import { errorHandler } from './middleware/error.js';
 
 const app = express();
@@ -41,6 +49,14 @@ app.use('/api/agents', agentRouter);
 app.use('/api/workflows', workflowRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/sessions', sessionRouter);
+app.use('/api/memory', memoryRouter);
+app.use('/api/skills', skillRouter);
+app.use('/api/playbooks', playbookRouter);
+app.use('/api/library', libraryRouter);
+app.use('/api/automations', automationRouter);
+app.use('/api/settings/hotkeys', hotkeyRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // Error handler
 app.use(errorHandler);

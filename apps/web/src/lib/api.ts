@@ -72,4 +72,52 @@ export const api = {
   // Settings
   getTools: () => request<unknown[]>('/settings/tools'),
   getProviders: () => request<Record<string, unknown>>('/settings/providers'),
+  getHotkeys: () => request<unknown[]>('/settings/hotkeys'),
+  updateHotkey: (action: string, binding: string) =>
+    request(`/settings/hotkeys/${action}`, {
+      method: 'PUT',
+      body: JSON.stringify({ binding, enabled: true }),
+    }),
+
+  // Dashboard
+  getDashboardStats: () => request<Record<string, number>>('/dashboard/stats'),
+
+  // Sessions
+  getSessions: (limit = 20, status?: string) =>
+    request<unknown[]>(`/sessions?limit=${limit}${status ? `&status=${status}` : ''}`),
+  getSession: (id: string) => request(`/sessions/${id}`),
+
+  // Memory
+  getMemoryItems: (limit = 50, status?: string, type?: string) =>
+    request<unknown[]>(`/memory?limit=${limit}${status ? `&status=${status}` : ''}${type ? `&type=${type}` : ''}`),
+  getMemoryItem: (id: string) => request(`/memory/${id}`),
+  reviewMemory: (id: string, decision: string, reason?: string) =>
+    request(`/memory/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reason }),
+    }),
+
+  // Skills
+  getSkills: () => request<unknown[]>('/skills'),
+  getSkill: (id: string) => request(`/skills/${id}`),
+
+  // Playbooks
+  getPlaybooks: () => request<unknown[]>('/playbooks'),
+  getPlaybook: (id: string) => request(`/playbooks/${id}`),
+  runPlaybook: (id: string) =>
+    request(`/playbooks/${id}/run`, { method: 'POST' }),
+
+  // Library
+  getLibraryFolders: () => request<unknown[]>('/library/folders'),
+  getLibraryFolder: (id: string) => request(`/library/folders/${id}`),
+  getLibraryDoc: (id: string) => request(`/library/docs/${id}`),
+  searchLibrary: (q: string) => request<unknown[]>(`/library/search?q=${encodeURIComponent(q)}`),
+
+  // Automations
+  getAutomations: () => request<unknown[]>('/automations'),
+  getAutomation: (id: string) => request(`/automations/${id}`),
+
+  // Recent commands (for command center)
+  getRecentCommands: (limit = 50, mode?: string) =>
+    request<unknown[]>(`/commands/history?limit=${limit}${mode ? `&mode=${mode}` : ''}`),
 };

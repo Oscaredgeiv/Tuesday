@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// ENUMS
+// ============================================================
+
 enum ActionStatus {
   requested
   planned
@@ -33,6 +37,61 @@ enum AgentStatus {
   busy
 }
 
+enum SessionStatus {
+  active
+  paused
+  completed
+  abandoned
+}
+
+enum MemoryStatus {
+  suggested
+  approved
+  rejected
+  archived
+}
+
+enum MemoryType {
+  user_preference
+  solved_problem
+  workflow_pattern
+  command_pattern
+  domain_knowledge
+  operational_note
+  skill_improvement
+}
+
+enum MemoryScope {
+  personal
+  project
+  team
+  org
+}
+
+enum DocumentStatus {
+  draft
+  published
+  archived
+}
+
+enum AutomationTrigger {
+  scheduled
+  event_driven
+  manual
+  recurring
+}
+
+enum AutomationStatus {
+  active
+  paused
+  disabled
+  error
+}
+
+// ============================================================
+// CORE: AGENTS + ACTIONS + APPROVALS
+// ============================================================
+
 model Agent {
   id         String      @id @default(cuid())
   name       String
@@ -44,6 +103,7 @@ model Agent {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   actions    Action[]
+  activityLogs AgentActivityLog[]
 
   @@index([apiKey])
 }
@@ -59,13 +119,17 @@ model Action {
   requiresApproval Boolean      @default(false)
   agentId          String?
   agent            Agent?       @relation(fields: [agentId], references: [id])
+  sessionId        String?
+  session          Session?     @relation(fields: [sessionId], references: [id])
   approval         Approval?
   auditLogs        AuditLog[]
+  skillExecutions  SkillExecution[]
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
   @@index([status])
   @@index([agentId])
+  @@index([sessionId])
   @@index([createdAt])
 }
 
@@ -98,19 +162,459 @@ model AuditLog {
   @@index([createdAt])
 }
 
-model CommandHistory {
+// ============================================================
+// SESSIONS
+// ============================================================
+
+model Session {
+  id           String        @id @default(cuid())
+  title        String?
+  type         String        @default("interactive") // interactive, voice, automation, background
+  status       SessionStatus @default(active)
+  summary      String?
+  successScore Float?
+  feedback     String?
+  metadata     Json?
+  startedAt    DateTime      @default(now())
+  endedAt      DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  actions         Action[]
+  artifacts       SessionArtifact[]
+  voiceSessions   VoiceSession[]
+  commands        Command[]
+  memoryItems     MemoryItem[]
+  skillExecutions SkillExecution[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SessionArtifact {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      String   // command_output, transcript, note, document, playbook, memory
+  title     String
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([type])
+}
+
+// ============================================================
+// VOICE
+// ============================================================
+
+model VoiceSession {
+  id          String   @id @default(cuid())
+  sessionId   String?
+  session     Session? @relation(fields: [sessionId], references: [id])
+  status      String   @default("idle") // idle, listening, processing, completed, error
+  mode        String   @default("mixed") // dictation, command, mixed
+  audioFormat String?
+  durationMs  Int?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+
+  segments TranscriptSegment[]
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model TranscriptSegment {
+  id             String       @id @default(cuid())
+  voiceSessionId String
+  voiceSession   VoiceSession @relation(fields: [voiceSessionId], references: [id], onDelete: Cascade)
+  text           String
+  cleanedText    String?
+  confidence     Float?
+  startMs        Int?
+  endMs          Int?
+  isFinal        Boolean      @default(true)
+  classification String?      // dictation, command, note, memory
+  createdAt      DateTime     @default(now())
+
+  @@index([voiceSessionId])
+}
+
+// ============================================================
+// COMMANDS
+// ============================================================
+
+model Command {
   id         String   @id @default(cuid())
   rawText    String
-  mode       String
+  mode       String   // dictation, command, slash
   intent     String?
   toolName   String?
   actionId   String?
+  sessionId  String?
+  session    Session? @relation(fields: [sessionId], references: [id])
   confidence Float?
+  status     String   @default("executed") // pending, executed, failed, cancelled
+  output     Json?
+  pinned     Boolean  @default(false)
   agentId    String?
   createdAt  DateTime @default(now())
 
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([pinned])
+}
+
+// ============================================================
+// MEMORY & LEARNING
+// ============================================================
+
+model MemoryItem {
+  id              String      @id @default(cuid())
+  title           String
+  type            MemoryType
+  summary         String
+  content         String
+  sourceSessionId String?
+  sourceSession   Session?    @relation(fields: [sourceSessionId], references: [id])
+  tags            String[]    @default([])
+  confidence      Float       @default(0.5)
+  status          MemoryStatus @default(suggested)
+  scope           MemoryScope @default(personal)
+  applicableContext String?
+  successCount    Int         @default(0)
+  lastUsedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  reviews MemoryReview[]
+
+  @@index([status])
+  @@index([type])
+  @@index([tags])
   @@index([createdAt])
 }
+
+model MemoryReview {
+  id           String     @id @default(cuid())
+  memoryItemId String
+  memoryItem   MemoryItem @relation(fields: [memoryItemId], references: [id], onDelete: Cascade)
+  decision     String     // approved, rejected, edited, merged
+  reason       String?
+  reviewedBy   String?
+  createdAt    DateTime   @default(now())
+
+  @@index([memoryItemId])
+}
+
+// ============================================================
+// SKILLS
+// ============================================================
+
+model Skill {
+  id           String   @id @default(cuid())
+  name         String
+  description  String
+  category     String   // command, workflow, retrieval, analysis, communication
+  successRate  Float    @default(0)
+  totalRuns    Int      @default(0)
+  lastRunAt    DateTime?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  versions   SkillVersion[]
+  executions SkillExecution[]
+
+  @@index([category])
+  @@index([successRate])
+}
+
+model SkillVersion {
+  id          String   @id @default(cuid())
+  skillId     String
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  version     Int
+  prompt      String
+  config      Json?
+  changelog   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([skillId, version])
+  @@index([skillId])
+}
+
+model SkillExecution {
+  id        String   @id @default(cuid())
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id])
+  actionId  String?
+  action    Action?  @relation(fields: [actionId], references: [id])
+  sessionId String?
+  session   Session? @relation(fields: [sessionId], references: [id])
+  input     Json?
+  output    Json?
+  success   Boolean?
+  durationMs Int?
+  createdAt DateTime @default(now())
+
+  feedback SkillFeedback[]
+
+  @@index([skillId])
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model SkillFeedback {
+  id          String         @id @default(cuid())
+  executionId String
+  execution   SkillExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  rating      Int            // 1-5
+  comment     String?
+  wasEdited   Boolean        @default(false)
+  suggestPlaybook Boolean    @default(false)
+  suggestMemory   Boolean    @default(false)
+  createdAt   DateTime       @default(now())
+
+  @@index([executionId])
+}
+
+// ============================================================
+// PLAYBOOKS
+// ============================================================
+
+model Playbook {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  category      String?
+  triggerPhrase String?
+  enabled       Boolean  @default(true)
+  version       Int      @default(1)
+  tags          String[] @default([])
+  totalRuns     Int      @default(0)
+  successRate   Float    @default(0)
+  lastRunAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  steps PlaybookStep[]
+  runs  PlaybookRun[]
+
+  @@index([category])
+  @@index([tags])
+}
+
+model PlaybookStep {
+  id          String   @id @default(cuid())
+  playbookId  String
+  playbook    Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  order       Int
+  toolName    String
+  description String
+  input       Json
+  continueOnError Boolean @default(false)
+  condition   String?
+  createdAt   DateTime @default(now())
+
+  @@index([playbookId])
+  @@unique([playbookId, order])
+}
+
+model PlaybookRun {
+  id          String    @id @default(cuid())
+  playbookId  String
+  playbook    Playbook  @relation(fields: [playbookId], references: [id])
+  status      String    @default("running") // running, succeeded, failed, cancelled
+  stepResults Json      @default("[]")
+  triggeredBy String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([playbookId])
+  @@index([startedAt])
+}
+
+// ============================================================
+// LIBRARY
+// ============================================================
+
+model LibraryFolder {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  description String?
+  parentId    String?
+  parent      LibraryFolder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children    LibraryFolder[] @relation("FolderTree")
+  documents   LibraryDocument[]
+  sortOrder   Int      @default(0)
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([parentId, slug])
+  @@index([parentId])
+}
+
+model LibraryDocument {
+  id          String         @id @default(cuid())
+  folderId    String
+  folder      LibraryFolder  @relation(fields: [folderId], references: [id])
+  title       String
+  slug        String
+  type        String         // solution, playbook, decision, process, reference, transcript, pattern
+  summary     String
+  content     String
+  abstract    String?        // short search-friendly abstract
+  status      DocumentStatus @default(published)
+  tags        String[]       @default([])
+  successCount Int           @default(0)
+  viewCount   Int            @default(0)
+  lastAccessedAt DateTime?
+  parentDocId String?
+  parentDoc   LibraryDocument? @relation("DocTree", fields: [parentDocId], references: [id])
+  childDocs   LibraryDocument[] @relation("DocTree")
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  versions    LibraryDocumentVersion[]
+  linksFrom   LibraryLink[] @relation("LinkFrom")
+  linksTo     LibraryLink[] @relation("LinkTo")
+
+  @@unique([folderId, slug])
+  @@index([folderId])
+  @@index([type])
+  @@index([status])
+  @@index([tags])
+  @@index([successCount])
+  @@index([createdAt])
+}
+
+model LibraryDocumentVersion {
+  id         String          @id @default(cuid())
+  documentId String
+  document   LibraryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version    Int
+  content    String
+  summary    String?
+  changedBy  String?
+  changelog  String?
+  createdAt  DateTime        @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId])
+}
+
+model LibraryLink {
+  id           String          @id @default(cuid())
+  fromDocId    String
+  fromDoc      LibraryDocument @relation("LinkFrom", fields: [fromDocId], references: [id], onDelete: Cascade)
+  toDocId      String
+  toDoc        LibraryDocument @relation("LinkTo", fields: [toDocId], references: [id], onDelete: Cascade)
+  relationship String          // related, prerequisite, supersedes, references, child_of
+  createdAt    DateTime        @default(now())
+
+  @@unique([fromDocId, toDocId])
+  @@index([fromDocId])
+  @@index([toDocId])
+}
+
+// ============================================================
+// RETRIEVAL
+// ============================================================
+
+model RetrievalIndex {
+  id          String   @id @default(cuid())
+  documentId  String
+  chunkIndex  Int      @default(0)
+  content     String
+  embedding   Float[]  @default([])
+  metadata    Json?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+}
+
+model RetrievalHit {
+  id         String   @id @default(cuid())
+  query      String
+  documentId String
+  score      Float
+  wasUseful  Boolean?
+  sessionId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// AUTOMATIONS
+// ============================================================
+
+model Automation {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  trigger     AutomationTrigger
+  triggerConfig Json?           // cron expression, event name, etc.
+  playbookId  String?
+  toolName    String?
+  input       Json?
+  status      AutomationStatus  @default(active)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  totalRuns   Int               @default(0)
+  failCount   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status])
+  @@index([nextRunAt])
+}
+
+// ============================================================
+// AGENT ACTIVITY
+// ============================================================
+
+model AgentActivityLog {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  event     String
+  toolName  String?
+  details   Json?
+  durationMs Int?
+  createdAt DateTime @default(now())
+
+  @@index([agentId])
+  @@index([event])
+  @@index([createdAt])
+}
+
+// ============================================================
+// HOTKEYS
+// ============================================================
+
+model HotkeyPreference {
+  id        String   @id @default(cuid())
+  action    String   @unique // push_to_talk, execute_command, command_palette, save_memory, save_playbook, open_library, open_voice, toggle_session
+  binding   String   // e.g. "Ctrl+Shift+T"
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// LEGACY COMPAT (kept for migration)
+// ============================================================
 
 model Workflow {
   id            String   @id @default(cuid())
