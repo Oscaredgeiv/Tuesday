@@ -8,7 +8,7 @@ import { auditService } from '../services/audit.js';
 export const authRouter = Router();
 
 // Simple single-user auth for MVP. Replace with proper auth provider later.
-const ADMIN_USER = { username: 'admin', password: 'tuesday', role: 'admin' as const };
+const ADMIN_USER = { username: 'Oscar@servicestorm.io', password: 'Redsun301!', role: 'admin' as const };
 
 authRouter.post('/login', validate(LoginRequestSchema), async (req, res) => {
   const { username, password } = req.body;
